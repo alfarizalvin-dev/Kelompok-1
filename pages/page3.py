@@ -1,58 +1,54 @@
 import streamlit as st
 import pandas as pd
 import os
-import numpy as np
 import altair as alt
+import geopandas as gpd
+from difflib import get_close_matches
 
+# =====================================================
+# PAGE CONFIG
+# =====================================================
+st.set_page_config(
+    page_title="Analisis Data & Kesimpulan",
+    layout="wide"
+)
+
+# =====================================================
+# STYLE (UI COLORFULL)
+# =====================================================
 st.markdown("""
 <style>
-/* Background utama */
-.main {
-    background-color: #f8fafc;
-}
-
-/* Judul */
-h1 {
-    color: #1e3a8a;
-}
-
-/* Subjudul */
-h2, h3 {
-    color: #0f766e;
-}
-
-/* Box metrik */
-.metric-container {
-    background-color: #ffffff;
+.main { background-color: #f8fafc; }
+h1 { color: #1e40af; }
+h2 { color: #0f766e; }
+.metric-box {
+    background-color: white;
     padding: 16px;
-    border-radius: 12px;
+    border-radius: 14px;
     box-shadow: 0 4px 10px rgba(0,0,0,0.05);
+    text-align: center;
 }
-
-/* Highlight kesimpulan */
 .highlight {
     background-color: #ecfeff;
-    padding: 15px;
+    padding: 18px;
     border-left: 6px solid #06b6d4;
-    border-radius: 8px;
+    border-radius: 10px;
 }
 </style>
 """, unsafe_allow_html=True)
 
-
-st.set_page_config(page_title="Analisis & Kesimpulan", layout="wide")
-
-# ===============================
-# LOAD DATASET
-# ===============================
+# =====================================================
+# LOAD DATA
+# =====================================================
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 DATA_PATH = os.path.join(BASE_DIR, "Dataset_prakbigdata.xlsx")
+GEO_PATH = os.path.join(BASE_DIR, "indonesia_provinsi.json")
 
 df = pd.read_excel(DATA_PATH)
 
-# ===============================
-# STANDARISASI NAMA KOLOM
-# ===============================
+# =====================================================
+# STANDARISASI KOLOM
+# =====================================================
 df.columns = (
     df.columns
     .str.strip()
@@ -63,34 +59,21 @@ df.columns = (
     .str.replace("%", "")
 )
 
-# ===============================
-# IDENTIFIKASI KOLOM UTAMA
-# (AMAN UNTUK DATASET BERBEDA)
-# ===============================
 kol_prov = df.columns[0]
 kol_tahun = df.columns[1]
+indikator = df.columns[2:]
 
-indikator = df.columns[2:]  # sisanya indikator pembangunan
-
-# ===============================
-# JUDUL
-# ===============================
-st.title("📊 Analisis dan Kesimpulan")
-
-st.markdown("""
-Halaman ini menyajikan **analisis empiris dan kesimpulan berbasis data**  
-yang **berubah secara otomatis** sesuai dengan wilayah dan periode waktu yang dipilih.
-""")
-
-# ===============================
-# FILTER
-# ===============================
+# =====================================================
+# SIDEBAR FILTER
+# =====================================================
 st.sidebar.header("🔍 Filter Data")
 
+provinsi_list = sorted(df[kol_prov].unique())
+
 provinsi = st.sidebar.multiselect(
-    "Pilih Wilayah",
-    options=sorted(df[kol_prov].unique()),
-    default=sorted(df[kol_prov].unique())
+    "Pilih Provinsi",
+    provinsi_list,
+    default=provinsi_list
 )
 
 tahun = st.sidebar.slider(
@@ -100,261 +83,222 @@ tahun = st.sidebar.slider(
     (int(df[kol_tahun].min()), int(df[kol_tahun].max()))
 )
 
+indikator_pilihan = st.sidebar.selectbox(
+    "Pilih Indikator Perbandingan",
+    indikator
+)
+
 filtered_df = df[
     (df[kol_prov].isin(provinsi)) &
     (df[kol_tahun].between(tahun[0], tahun[1]))
 ]
 
-# ===============================
-# RINGKASAN STATISTIK
-# ===============================
+# =====================================================
+# TITLE
+# =====================================================
+st.title("📊 Analisis Data & Kesimpulan Dinamis")
+
+st.markdown("""
+Halaman ini menyajikan **analisis interaktif** berbasis data pembangunan provinsi.
+Seluruh grafik, peta, dan kesimpulan akan **berubah otomatis** sesuai filter.
+""")
+
+# =====================================================
+# METRIC RINGKASAN
+# =====================================================
+st.subheader("📌 Ringkasan Statistik")
+
 mean_values = filtered_df[indikator].mean()
 
-
-st.subheader("📈 Ringkasan Statistik Utama")
-
-cols = st.columns(3)
+cols = st.columns(4)
 for i, col in enumerate(mean_values.index):
-    with cols[i % 3]:
-        st.metric(
-            label=col.replace("_", " ").upper(),
-            value=f"{mean_values[col]:.2f}"
+    with cols[i % 4]:
+        st.markdown(
+            f"""
+            <div class="metric-box">
+                <b>{col.replace('_',' ').upper()}</b><br>
+                <h3>{mean_values[col]:.2f}</h3>
+            </div>
+            """,
+            unsafe_allow_html=True
         )
 
+# =====================================================
+# MAP (Peta Provinsi + Auto Mapping)
+# =====================================================
+st.subheader("🗺️ Peta Sebaran Provinsi")
 
-# ======================================================
-# 📊 PERBANDINGAN & TREN INDIKATOR ANTAR PROVINSI
-# ======================================================
+# Load GeoJSON ke GeoDataFrame
+gdf = gpd.read_file(GEO_PATH)
 
-st.subheader("📊 Perbandingan & Tren Indikator Antar Provinsi")
+# Nama kolom provinsi di GeoJSON
+geojson_prop = list(gdf.columns)[0]  # asumsi kolom pertama adalah provinsi
 
-# ===============================
-# SATU FILTER INDIKATOR (GLOBAL)
-# ===============================
-indikator_pilihan = st.selectbox(
-    "Pilih indikator",
-    indikator
+# Auto mapping: samakan nama provinsi GeoJSON dengan DataFrame
+def map_provinsi(name, prov_list):
+    match = get_close_matches(name, prov_list, n=1, cutoff=0.6)
+    return match[0] if match else name
+
+gdf["prov_mapped"] = gdf[geojson_prop].apply(lambda x: map_provinsi(x, df[kol_prov].unique()))
+
+# Merge dengan rata-rata indikator
+map_df = gdf.merge(
+    filtered_df.groupby(kol_prov)[indikator_pilihan].mean().reset_index(),
+    left_on="prov_mapped",
+    right_on=kol_prov,
+    how='left'
 )
 
-# Layout bersandingan
+# Altair chart
+map_chart = alt.Chart(map_df).mark_geoshape(
+    stroke='white'
+).encode(
+    color=alt.Color(f"{indikator_pilihan}:Q", title=indikator_pilihan),
+    tooltip=[
+        alt.Tooltip(f"{kol_prov}:N", title="Provinsi"),
+        alt.Tooltip(f"{indikator_pilihan}:Q")
+    ]
+).project(
+    type='mercator'
+).properties(
+    height=420
+)
+
+st.altair_chart(map_chart, use_container_width=True)
+
+# =====================================================
+# BAR & LINE SIDE BY SIDE
+# =====================================================
+st.subheader("📊 Perbandingan & Tren Indikator")
+
 col1, col2 = st.columns(2)
 
-# ======================================================
-# 📊 PERBANDINGAN RATA-RATA ANTAR PROVINSI (BAR CHART)
-# ======================================================
+# ---------- BAR ----------
+prov_df = (
+    filtered_df
+    .groupby(kol_prov)[indikator_pilihan]
+    .mean()
+    .reset_index()
+    .sort_values(by=indikator_pilihan)
+)
+
+bar_chart = alt.Chart(prov_df).mark_bar().encode(
+    y=alt.Y(f"{kol_prov}:N", title="Provinsi"),
+    x=alt.X(f"{indikator_pilihan}:Q", title="Rata-rata"),
+    color=alt.Color(f"{kol_prov}:N", legend=None),
+    tooltip=[kol_prov, indikator_pilihan]
+)
+
 with col1:
-    st.markdown("📊 **Perbandingan Rata-Rata Antar Provinsi**")
+    st.altair_chart(bar_chart, use_container_width=True)
 
-    if filtered_df.empty:
-        st.warning("Data tidak tersedia untuk grafik perbandingan.")
-    else:
-        bar_df = (
-            filtered_df
-            .groupby(kol_prov)[indikator_pilihan]
-            .mean()
-            .reset_index()
-            .sort_values(by=indikator_pilihan, ascending=False)
-        )
+# ---------- LINE ----------
+trend_df = (
+    filtered_df
+    .groupby([kol_tahun, kol_prov])[indikator_pilihan]
+    .mean()
+    .reset_index()
+)
 
-        bar_chart = alt.Chart(bar_df).mark_bar().encode(
-            x=alt.X(f"{indikator_pilihan}:Q", title="Nilai Rata-rata"),
-            y=alt.Y(f"{kol_prov}:N", sort='-x', title="Provinsi"),
-            tooltip=[kol_prov, indikator_pilihan]
-        ).properties(
-            height=400
-        )
+line_chart = alt.Chart(trend_df).mark_line(point=True).encode(
+    x=alt.X(f"{kol_tahun}:O", title="Tahun"),
+    y=alt.Y(f"{indikator_pilihan}:Q", title="Nilai"),
+    color=alt.Color(f"{kol_prov}:N", title="Provinsi"),
+    tooltip=[kol_prov, kol_tahun, indikator_pilihan]
+)
 
-        st.altair_chart(bar_chart, use_container_width=True)
-
-# ======================================================
-# 📈 TREN INDIKATOR ANTAR PROVINSI (LINE CHART)
-# ======================================================
 with col2:
-    st.markdown("📈 **Tren Indikator Antar Provinsi**")
+    st.altair_chart(line_chart, use_container_width=True)
 
-    if filtered_df.empty:
-        st.warning("Data tidak tersedia untuk grafik tren.")
-    else:
-        tren_df = (
-            filtered_df
-            .groupby([kol_tahun, kol_prov])[indikator_pilihan]
-            .mean()
-            .reset_index()
+# =====================================================
+# ANALISIS PARAGRAF OTOMATIS
+# =====================================================
+st.subheader("🧠 Analisis Data")
+
+analisis = []
+for col in indikator:
+    tren = filtered_df.groupby(kol_tahun)[col].mean()
+    if len(tren) > 1:
+        arah = "meningkat 📈" if tren.iloc[-1] > tren.iloc[0] else "menurun 📉"
+        analisis.append(
+            f"Rata-rata {col.replace('_',' ').upper()} sebesar {mean_values[col]:.2f} "
+            f"dan secara umum {arah} selama periode pengamatan."
         )
 
-        if tren_df.empty:
-            st.warning("Data tidak cukup untuk menampilkan tren.")
-        else:
-            line_chart = alt.Chart(tren_df).mark_line(point=True).encode(
-                x=alt.X(f"{kol_tahun}:O", title="Tahun"),
-                y=alt.Y(f"{indikator_pilihan}:Q", title="Nilai"),
-                color=alt.Color(f"{kol_prov}:N", title="Provinsi"),
-                tooltip=[kol_prov, kol_tahun, indikator_pilihan]
-            ).properties(
-                height=400
-            )
+st.markdown(
+    "<div class='highlight'>" + " ".join(analisis) + "</div>",
+    unsafe_allow_html=True
+)
 
-            st.altair_chart(line_chart, use_container_width=True)
-
-st.markdown("### ⬇️ Unduh Data yang Ditampilkan")
+# =====================================================
+# DOWNLOAD DATA
+# =====================================================
+st.subheader("📥 Unduh Data")
 
 csv = filtered_df.to_csv(index=False).encode("utf-8")
 
 st.download_button(
-    label="📥 Download data (CSV)",
-    data=csv,
-    file_name="data_terfilter_page3.csv",
-    mime="text/csv"
+    "Download Data Terfilter (CSV)",
+    csv,
+    "data_page3_terfilter.csv",
+    "text/csv"
 )
 
-
-# ===============================
-# VALIDASI DATA SEBELUM ANALISIS
-# ===============================
-if filtered_df.empty or len(provinsi) == 0:
-    st.info("👆 Pilih minimal satu wilayah untuk menampilkan analisis dan kesimpulan.")
-    st.stop()
-
-
-# ===============================
-# ANALISIS DATA (PARAGRAF + HIGHLIGHT OTOMATIS)
-# ===============================
-st.subheader("🔍 Analisis Data")
-
-paragraf = []
-
-for col in indikator:
-    tren = filtered_df.groupby(kol_tahun)[col].mean()
-
-    # Tentukan arah tren
-    if len(tren) < 2:
-        arah = "stabil"
-        warna = "#facc15"  # kuning
-        ikon = "🟡"
-    elif tren.iloc[-1] > tren.iloc[0]:
-        arah = "mengalami peningkatan"
-        warna = "#16a34a"  # hijau
-        ikon = "🟢"
-    else:
-        arah = "mengalami penurunan"
-        warna = "#dc2626"  # merah
-        ikon = "🔴"
-
-    nilai_rata = mean_values[col]
-
-    # Kalimat utama + highlight warna
-    kalimat = f"""
-    <span style="
-        background-color:{warna}22;
-        padding:6px 10px;
-        border-radius:8px;
-        display:inline-block;
-        margin-bottom:6px;
-    ">
-    {ikon} <b>{col.replace('_',' ').upper()}</b> memiliki rata-rata sebesar
-    <b>{nilai_rata:.2f}</b> dan secara umum <b>{arah}</b> selama periode pengamatan.
-    </span>
-    """
-
-    # Interpretasi kontekstual
-    if "ahh" in col:
-        kalimat += " Peningkatan ini mencerminkan perbaikan kualitas kesehatan dan layanan publik."
-    elif "aml" in col or "rls" in col:
-        kalimat += " Hal ini menunjukkan kemajuan akses dan kualitas pendidikan."
-    elif "ppm" in col or "miskin" in col:
-        kalimat += " Perubahan ini mengindikasikan dinamika tingkat kesejahteraan masyarakat."
-    elif "tpt" in col:
-        kalimat += " Kondisi ini mencerminkan situasi pasar tenaga kerja di wilayah tersebut."
-    elif "ipm" in col:
-        kalimat += " IPM yang meningkat menunjukkan kemajuan pembangunan manusia secara komprehensif."
-    elif "gini" in col:
-        kalimat += " Penurunan ketimpangan berkontribusi pada pertumbuhan yang lebih inklusif."
-    elif "inflasi" in col:
-        kalimat += " Stabilitas inflasi penting untuk menjaga daya beli masyarakat."
-    elif "pdrb" in col:
-        kalimat += " Peningkatan PDRB per kapita mencerminkan membaiknya kapasitas ekonomi daerah."
-    elif "growth" in col or "pertumbuhan" in col:
-        kalimat += " Perlambatan pertumbuhan perlu menjadi perhatian dalam perumusan kebijakan."
-
-    paragraf.append(f"<p style='margin-bottom:14px; text-align:justify'>{kalimat}</p>")
-
-# Gabungkan semua paragraf
-analisis_html = "".join(paragraf)
-
-# Tampilkan dalam container rapi
-st.markdown(
-    f"""
-    <div style="
-        background-color:#f8fafc;
-        padding:22px;
-        border-radius:14px;
-        border-left:6px solid #2563eb;
-    ">
-    {analisis_html}
-    </div>
-    """,
-    unsafe_allow_html=True
-)
-
-
-
-
-# ===============================
-# KESIMPULAN DINAMIS
-# ===============================
-st.subheader("✅ Kesimpulan")
-
-st.markdown(f"""
-<div class="highlight">
-<b>Kesimpulan Utama:</b><br><br>
-Berdasarkan data wilayah <b>{', '.join(provinsi)}</b> pada periode
-<b>{tahun[0]}–{tahun[1]}</b>, indikator pembangunan menunjukkan dinamika
-yang saling berkaitan dan mencerminkan kondisi ekonomi serta sosial daerah.
-
-Perubahan indikator mengindikasikan bahwa kebijakan pembangunan perlu
-dirancang secara terintegrasi agar pertumbuhan yang dicapai bersifat
-inklusif dan berkelanjutan.
-</div>
-""", unsafe_allow_html=True)
-
-
-# ===============================
-# DATA PREVIEW (OPSIONAL)
-# ===============================
+# =====================================================
+# PREVIEW
+# =====================================================
 with st.expander("📋 Lihat Data Terfilter"):
     st.dataframe(filtered_df)
 
+# =====================================================
+# FILTER & ANALISIS SEBAB-AKIBAT INTERAKTIF
+# =====================================================
+st.subheader("🧩 Analisis Sebab-Akibat (Tabel Interaktif)")
 
-# ======================================================
-# INTERPRETASI SEBAB–AKIBAT
-# ======================================================
-st.subheader("🔍 Interpretasi Sebab–Akibat")
+# Sidebar filter khusus sebab-akibat
+st.sidebar.markdown("### 🔹 Filter Sebab-Akibat")
+indikator_sebab = st.sidebar.multiselect(
+    "Pilih Indikator Penyebab",
+    indikator,
+    default=indikator
+)
 
-for col in indikator:
-    with st.expander(f"Analisis {col.replace('_',' ').upper()}"):
-        tren = filtered_df.groupby(kol_tahun)[col].mean()
-        arah = "meningkat" if tren.iloc[-1] > tren.iloc[0] else "menurun"
+indikator_dampak = st.sidebar.multiselect(
+    "Pilih Indikator Dampak",
+    indikator,
+    default=indikator
+)
 
-        st.markdown(
-            f"📌 **Tren:** {arah.capitalize()} selama periode pengamatan.\n\n"
-        )
+# Buat list untuk menampung hasil
+sebab_akibat_data = []
 
-        if "ipm" in col:
-            st.info(
-                "Peningkatan IPM menunjukkan perbaikan kualitas sumber daya manusia "
-                "yang berpotensi mendorong produktivitas dan pertumbuhan ekonomi."
-            )
-        elif "tpt" in col:
-            st.warning(
-                "Perubahan tingkat pengangguran mencerminkan kondisi pasar tenaga kerja "
-                "yang berdampak langsung pada kesejahteraan masyarakat."
-            )
-        elif "miskin" in col:
-            st.success(
-                "Penurunan tingkat kemiskinan mengindikasikan dampak positif kebijakan "
-                "dan pertumbuhan ekonomi terhadap kesejahteraan."
-            )
-        elif "gini" in col:
-            st.error(
-                "Ketimpangan yang meningkat berpotensi mengurangi inklusivitas pertumbuhan."
-            )
+for col1 in indikator_sebab:
+    tren1 = filtered_df.groupby(kol_tahun)[col1].mean()
+    if len(tren1) < 2:
+        continue
+    arah1 = "Meningkat 📈" if tren1.iloc[-1] > tren1.iloc[0] else "Menurun 📉"
+    
+    for col2 in indikator_dampak:
+        if col1 == col2:
+            continue  # jangan bandingkan dengan dirinya sendiri
+        tren2 = filtered_df.groupby(kol_tahun)[col2].mean()
+        if len(tren2) < 2:
+            continue
+        arah2 = "Meningkat 📈" if tren2.iloc[-1] > tren2.iloc[0] else "Menurun 📉"
+
+        pengaruh = "Positif ✅" if arah1 == arah2 else "Negatif ❌"
+
+        sebab_akibat_data.append({
+            "Indikator Penyebab": col1.replace("_"," ").title(),
+            "Indikator Dampak": col2.replace("_"," ").title(),
+            "Arah Penyebab": arah1,
+            "Arah Dampak": arah2,
+            "Pengaruh": pengaruh
+        })
+
+# Tampilkan tabel
+if sebab_akibat_data:
+    df_sebab_akibat = pd.DataFrame(sebab_akibat_data)
+    st.dataframe(df_sebab_akibat)
+else:
+    st.write("Tidak ada data untuk kombinasi indikator yang dipilih.")
