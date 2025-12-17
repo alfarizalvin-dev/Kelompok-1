@@ -121,54 +121,80 @@ for i, col in enumerate(mean_values.index):
             value=f"{mean_values[col]:.2f}"
         )
 
-st.subheader("📊 Perbandingan Rata-Rata Indikator Antar Provinsi")
 
-# Pilih indikator untuk grafik
+# ======================================================
+# 📊 PERBANDINGAN & TREN INDIKATOR ANTAR PROVINSI
+# ======================================================
+
+st.subheader("📊 Perbandingan & Tren Indikator Antar Provinsi")
+
+# ===============================
+# SATU FILTER INDIKATOR (GLOBAL)
+# ===============================
 indikator_pilihan = st.selectbox(
-    "Pilih indikator yang ditampilkan",
+    "Pilih indikator",
     indikator
 )
 
-# Agregasi rata-rata per provinsi
-provinsi_df = (
-    filtered_df
-    .groupby(kol_prov)[indikator_pilihan]
-    .mean()
-    .reset_index()
-    .sort_values(by=indikator_pilihan, ascending=True)
-)
+# Layout bersandingan
+col1, col2 = st.columns(2)
 
-import altair as alt
+# ======================================================
+# 📊 PERBANDINGAN RATA-RATA ANTAR PROVINSI (BAR CHART)
+# ======================================================
+with col1:
+    st.markdown("📊 **Perbandingan Rata-Rata Antar Provinsi**")
 
-chart = alt.Chart(provinsi_df).mark_bar().encode(
-    y=alt.Y(f"{kol_prov}:N", sort="-x", title="Provinsi"),
-    x=alt.X(f"{indikator_pilihan}:Q", title="Nilai Rata-rata"),
-    color=alt.Color(f"{kol_prov}:N", legend=None),
-    tooltip=[kol_prov, indikator_pilihan]
-).properties(
-    height=400
-)
+    if filtered_df.empty:
+        st.warning("Data tidak tersedia untuk grafik perbandingan.")
+    else:
+        bar_df = (
+            filtered_df
+            .groupby(kol_prov)[indikator_pilihan]
+            .mean()
+            .reset_index()
+            .sort_values(by=indikator_pilihan, ascending=False)
+        )
 
-st.altair_chart(chart, use_container_width=True)
+        bar_chart = alt.Chart(bar_df).mark_bar().encode(
+            x=alt.X(f"{indikator_pilihan}:Q", title="Nilai Rata-rata"),
+            y=alt.Y(f"{kol_prov}:N", sort='-x', title="Provinsi"),
+            tooltip=[kol_prov, indikator_pilihan]
+        ).properties(
+            height=400
+        )
 
-st.subheader("📊 Tren Indikator")
+        st.altair_chart(bar_chart, use_container_width=True)
 
-selected_indicator = st.selectbox(
-    "Pilih indikator untuk ditampilkan",
-    indikator
-)
+# ======================================================
+# 📈 TREN INDIKATOR ANTAR PROVINSI (LINE CHART)
+# ======================================================
+with col2:
+    st.markdown("📈 **Tren Indikator Antar Provinsi**")
 
-trend_df = (
-    filtered_df
-    .groupby(kol_tahun)[selected_indicator]
-    .mean()
-    .reset_index()
-)
+    if filtered_df.empty:
+        st.warning("Data tidak tersedia untuk grafik tren.")
+    else:
+        tren_df = (
+            filtered_df
+            .groupby([kol_tahun, kol_prov])[indikator_pilihan]
+            .mean()
+            .reset_index()
+        )
 
-st.line_chart(
-    trend_df.set_index(kol_tahun)
-)
+        if tren_df.empty:
+            st.warning("Data tidak cukup untuk menampilkan tren.")
+        else:
+            line_chart = alt.Chart(tren_df).mark_line(point=True).encode(
+                x=alt.X(f"{kol_tahun}:O", title="Tahun"),
+                y=alt.Y(f"{indikator_pilihan}:Q", title="Nilai"),
+                color=alt.Color(f"{kol_prov}:N", title="Provinsi"),
+                tooltip=[kol_prov, kol_tahun, indikator_pilihan]
+            ).properties(
+                height=400
+            )
 
+            st.altair_chart(line_chart, use_container_width=True)
 
 st.markdown("### ⬇️ Unduh Data yang Ditampilkan")
 
@@ -183,28 +209,95 @@ st.download_button(
 
 
 # ===============================
-# ANALISIS OTOMATIS
+# VALIDASI DATA SEBELUM ANALISIS
 # ===============================
-st.subheader("🔎 Analisis Data")
+if filtered_df.empty or len(provinsi) == 0:
+    st.info("👆 Pilih minimal satu wilayah untuk menampilkan analisis dan kesimpulan.")
+    st.stop()
 
-analisis_teks = []
+
+# ===============================
+# ANALISIS DATA (PARAGRAF + HIGHLIGHT OTOMATIS)
+# ===============================
+st.subheader("🔍 Analisis Data")
+
+paragraf = []
 
 for col in indikator:
-    nilai = mean_values[col]
     tren = filtered_df.groupby(kol_tahun)[col].mean()
 
-    if tren.iloc[-1] > tren.iloc[0]:
+    # Tentukan arah tren
+    if len(tren) < 2:
+        arah = "stabil"
+        warna = "#facc15"  # kuning
+        ikon = "🟡"
+    elif tren.iloc[-1] > tren.iloc[0]:
         arah = "mengalami peningkatan"
+        warna = "#16a34a"  # hijau
+        ikon = "🟢"
     else:
         arah = "mengalami penurunan"
+        warna = "#dc2626"  # merah
+        ikon = "🔴"
 
-    analisis_teks.append(
-        f"- Rata-rata **{col.replace('_', ' ').upper()}** sebesar **{nilai:.2f}** "
-        f"dan secara umum **{arah}** pada periode pengamatan."
-    )
+    nilai_rata = mean_values[col]
 
-for a in analisis_teks:
-    st.markdown(a)
+    # Kalimat utama + highlight warna
+    kalimat = f"""
+    <span style="
+        background-color:{warna}22;
+        padding:6px 10px;
+        border-radius:8px;
+        display:inline-block;
+        margin-bottom:6px;
+    ">
+    {ikon} <b>{col.replace('_',' ').upper()}</b> memiliki rata-rata sebesar
+    <b>{nilai_rata:.2f}</b> dan secara umum <b>{arah}</b> selama periode pengamatan.
+    </span>
+    """
+
+    # Interpretasi kontekstual
+    if "ahh" in col:
+        kalimat += " Peningkatan ini mencerminkan perbaikan kualitas kesehatan dan layanan publik."
+    elif "aml" in col or "rls" in col:
+        kalimat += " Hal ini menunjukkan kemajuan akses dan kualitas pendidikan."
+    elif "ppm" in col or "miskin" in col:
+        kalimat += " Perubahan ini mengindikasikan dinamika tingkat kesejahteraan masyarakat."
+    elif "tpt" in col:
+        kalimat += " Kondisi ini mencerminkan situasi pasar tenaga kerja di wilayah tersebut."
+    elif "ipm" in col:
+        kalimat += " IPM yang meningkat menunjukkan kemajuan pembangunan manusia secara komprehensif."
+    elif "gini" in col:
+        kalimat += " Penurunan ketimpangan berkontribusi pada pertumbuhan yang lebih inklusif."
+    elif "inflasi" in col:
+        kalimat += " Stabilitas inflasi penting untuk menjaga daya beli masyarakat."
+    elif "pdrb" in col:
+        kalimat += " Peningkatan PDRB per kapita mencerminkan membaiknya kapasitas ekonomi daerah."
+    elif "growth" in col or "pertumbuhan" in col:
+        kalimat += " Perlambatan pertumbuhan perlu menjadi perhatian dalam perumusan kebijakan."
+
+    paragraf.append(f"<p style='margin-bottom:14px; text-align:justify'>{kalimat}</p>")
+
+# Gabungkan semua paragraf
+analisis_html = "".join(paragraf)
+
+# Tampilkan dalam container rapi
+st.markdown(
+    f"""
+    <div style="
+        background-color:#f8fafc;
+        padding:22px;
+        border-radius:14px;
+        border-left:6px solid #2563eb;
+    ">
+    {analisis_html}
+    </div>
+    """,
+    unsafe_allow_html=True
+)
+
+
+
 
 # ===============================
 # KESIMPULAN DINAMIS
