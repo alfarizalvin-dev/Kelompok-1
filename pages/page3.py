@@ -2,6 +2,7 @@ import streamlit as st
 import pandas as pd
 import os
 import numpy as np
+import altair as alt
 
 st.markdown("""
 <style>
@@ -119,6 +120,36 @@ for i, col in enumerate(mean_values.index):
             label=col.replace("_", " ").upper(),
             value=f"{mean_values[col]:.2f}"
         )
+
+st.subheader("📊 Perbandingan Rata-Rata Indikator Antar Provinsi")
+
+# Pilih indikator untuk grafik
+indikator_pilihan = st.selectbox(
+    "Pilih indikator yang ditampilkan",
+    indikator
+)
+
+# Agregasi rata-rata per provinsi
+provinsi_df = (
+    filtered_df
+    .groupby(kol_prov)[indikator_pilihan]
+    .mean()
+    .reset_index()
+    .sort_values(by=indikator_pilihan, ascending=True)
+)
+
+import altair as alt
+
+chart = alt.Chart(provinsi_df).mark_bar().encode(
+    y=alt.Y(f"{kol_prov}:N", sort="-x", title="Provinsi"),
+    x=alt.X(f"{indikator_pilihan}:Q", title="Nilai Rata-rata"),
+    color=alt.Color(f"{kol_prov}:N", legend=None),
+    tooltip=[kol_prov, indikator_pilihan]
+).properties(
+    height=400
+)
+
+st.altair_chart(chart, use_container_width=True)
 
 st.subheader("📊 Tren Indikator")
 
