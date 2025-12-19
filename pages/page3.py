@@ -1,9 +1,9 @@
 import streamlit as st
 import pandas as pd
+import plotly.express as px
+import json
 import os
-import altair as alt
-import geopandas as gpd
-from difflib import get_close_matches
+
 
 # =====================================================
 # PAGE CONFIG
@@ -124,49 +124,6 @@ for i, col in enumerate(mean_values.index):
         )
 
 # =====================================================
-# MAP (Peta Provinsi + Auto Mapping)
-# =====================================================
-st.subheader("🗺️ Peta Sebaran Provinsi")
-
-# Load GeoJSON ke GeoDataFrame
-gdf = gpd.read_file(GEO_PATH)
-
-# Nama kolom provinsi di GeoJSON
-geojson_prop = list(gdf.columns)[0]  # asumsi kolom pertama adalah provinsi
-
-# Auto mapping: samakan nama provinsi GeoJSON dengan DataFrame
-def map_provinsi(name, prov_list):
-    match = get_close_matches(name, prov_list, n=1, cutoff=0.6)
-    return match[0] if match else name
-
-gdf["prov_mapped"] = gdf[geojson_prop].apply(lambda x: map_provinsi(x, df[kol_prov].unique()))
-
-# Merge dengan rata-rata indikator
-map_df = gdf.merge(
-    filtered_df.groupby(kol_prov)[indikator_pilihan].mean().reset_index(),
-    left_on="prov_mapped",
-    right_on=kol_prov,
-    how='left'
-)
-
-# Altair chart
-map_chart = alt.Chart(map_df).mark_geoshape(
-    stroke='white'
-).encode(
-    color=alt.Color(f"{indikator_pilihan}:Q", title=indikator_pilihan),
-    tooltip=[
-        alt.Tooltip(f"{kol_prov}:N", title="Provinsi"),
-        alt.Tooltip(f"{indikator_pilihan}:Q")
-    ]
-).project(
-    type='mercator'
-).properties(
-    height=420
-)
-
-st.altair_chart(map_chart, use_container_width=True)
-
-# =====================================================
 # BAR & LINE SIDE BY SIDE
 # =====================================================
 st.subheader("📊 Perbandingan & Tren Indikator")
@@ -209,6 +166,58 @@ line_chart = alt.Chart(trend_df).mark_line(point=True).encode(
 
 with col2:
     st.altair_chart(line_chart, use_container_width=True)
+
+st.subheader("🗺️ Peta Provinsi Indonesia")
+
+BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+DATA_PATH = os.path.join(BASE_DIR, "Dataset_prakbigdata.xlsx")
+GEO_PATH = os.path.join(BASE_DIR, "indonesia_provinsi.json")
+
+df = pd.read_excel(DATA_PATH)
+
+# Standarisasi kolom
+df.columns = (
+    df.columns.str.strip().str.lower().str.replace(" ", "_")
+)
+
+kol_prov = df.columns[0]
+kol_tahun = df.columns[1]
+indikator = df.columns[2:]
+
+# Filter
+tahun = st.sidebar.slider(
+    "Pilih Tahun",
+    int(df[kol_tahun].min()),
+    int(df[kol_tahun].max()),
+    int(df[kol_tahun].max())
+)
+
+indikator_pilihan = st.sidebar.selectbox("Pilih Indikator", indikator)
+
+df_map = df[df[kol_tahun] == tahun]
+
+# Load geojson
+with open(GEO_PATH, "r", encoding="utf-8") as f:
+    geojson = json.load(f)
+
+fig = px.choropleth(
+    df_map,
+    geojson=geojson,
+    locations=kol_prov,
+    featureidkey="properties.name",
+    color=indikator_pilihan,
+    hover_name=kol_prov,
+    color_continuous_scale="Viridis",
+)
+
+fig.update_geos(fitbounds="locations", visible=False)
+fig.update_layout(margin=dict(l=0, r=0, t=30, b=0))
+
+st.plotly_chart(fig, use_container_width=True)
+
+
+
+
 
 # =====================================================
 # ANALISIS PARAGRAF OTOMATIS
