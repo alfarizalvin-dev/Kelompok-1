@@ -1,109 +1,103 @@
 import streamlit as st
 import pandas as pd
 import plotly.express as px
-import json
 
-# -----------------------
-# PAGE CONFIG
-# -----------------------
-st.set_page_config(
-    page_title="Dashboard Indikator Provinsi Indonesia",
-    layout="wide"
-)
+st.title("📈 Analisis Indikator Pembangunan Provinsi")
 
-st.title("📊 Dashboard Indikator Provinsi Indonesia")
-st.markdown("---")
-
-# -----------------------
+# =====================
 # LOAD DATA
-# -----------------------
+# =====================
 @st.cache_data
 def load_data():
     df = pd.read_excel("Dataset.xlsx")
     return df
 
-@st.cache_data
-def load_geojson():
-    with open("indonesia_provinsi.geojson", "r", encoding="utf-8") as f:
-        geo = json.load(f)
-    return geo
-
 df = load_data()
-geojson = load_geojson()
 
-# -----------------------
+# rapikan
+df["Provinsi"] = df["Provinsi"].str.strip().str.title()
+df["Tahun"] = df["Tahun"].astype(int)
+
+indikator_list = [
+    "AHH",                 # Angka Harapan Hidup
+    "AML",                 # Angka Melek Huruf
+    "PPM",                 # Penduduk Miskin
+    "RLS",                 # Rata-rata Lama Sekolah
+    "TPT",                 # Tingkat Pengangguran Terbuka
+    "IPM",                 # Indeks Pembangunan Manusia
+    "E_Growth",            # Pertumbuhan Ekonomi
+    "Laju_Pertumbuhan",    # Laju Pertumbuhan (alternatif)
+    "PDRB_Kapita",         # PDRB per Kapita
+    "Inflasi_(YoY)",       # Inflasi Year-on-Year
+    "Gini_Ratio"           # Ketimpangan
+]
+
+# =====================
 # SIDEBAR FILTER
-# -----------------------
-st.sidebar.header("🔎 Filter Data")
-
-tahun = st.sidebar.selectbox(
-    "Pilih Tahun",
-    sorted(df["Tahun"].unique())
-)
+# =====================
+st.sidebar.header("Filter")
 
 indikator = st.sidebar.selectbox(
     "Pilih Indikator",
-    ["AHH", "AML", "PPM", "RLS", "TPT", "IPM", "E_Growth", "Laju Pertumbuhan", "PDRB_Kapita", "Gini_Ratio"]
+    indikator_list
 )
 
-# Filter data
-df_filtered = df[df["Tahun"] == tahun]
+provinsi = st.sidebar.multiselect(
+    "Pilih Provinsi",
+    sorted(df["Provinsi"].unique()),
+    default=["Sumatera Utara"]
+)
 
-# -----------------------
-# CHOROPLETH MAP
-# -----------------------
-st.subheader("🗺️ Peta Indikator Provinsi Indonesia")
+tahun_range = st.sidebar.slider(
+    "Rentang Tahun",
+    int(df["Tahun"].min()),
+    int(df["Tahun"].max()),
+    (int(df["Tahun"].min()), int(df["Tahun"].max()))
+)
 
-fig_map = px.choropleth(
+# =====================
+# FILTER DATA
+# =====================
+df_filtered = df[
+    (df["Provinsi"].isin(provinsi)) &
+    (df["Tahun"].between(tahun_range[0], tahun_range[1]))
+]
+
+df_filtered[indikator] = pd.to_numeric(
+    df_filtered[indikator], errors="coerce"
+)
+
+# =====================
+# LINE CHART
+# =====================
+st.subheader(f"Perkembangan {indikator} Antar Provinsi")
+
+fig = px.line(
     df_filtered,
-    geojson=geojson,
-    locations="Provinsi",
-    featureidkey="properties.name",
-    color=indikator,
-    color_continuous_scale="Viridis",
-    hover_name="Provinsi",
-    hover_data={indikator: True},
-    title=f"Peta {indikator} Provinsi Indonesia Tahun {tahun}"
+    x="Tahun",
+    y=indikator,
+    color="Provinsi",
+    markers=True,
+    title=f"Tren {indikator} ({tahun_range[0]}–{tahun_range[1]})"
 )
 
-fig_map.update_geos(
-    fitbounds="locations",
-    visible=False
+fig.update_layout(
+    hovermode="x unified",
+    legend_title_text="Provinsi"
 )
 
-fig_map.update_layout(
-    height=600,
-    margin={"r":0,"t":50,"l":0,"b":0}
-)
+st.plotly_chart(fig, use_container_width=True)
 
-st.plotly_chart(fig_map, use_container_width=True)
-
-# -----------------------
-# INTERACTIVE TABLE
-# -----------------------
-st.subheader("📋 Tabel Data Provinsi")
-
-# Sorting
-sort_col = st.selectbox(
-    "Urutkan Berdasarkan",
-    ["Provinsi", indikator]
-)
-
-sort_order = st.radio(
-    "Urutan",
-    ["Terbesar ke Terkecil", "Terkecil ke Terbesar"],
-    horizontal=True
-)
-
-ascending = sort_order == "Terkecil ke Terbesar"
-
-df_table = df_filtered.sort_values(
-    by=sort_col,
-    ascending=ascending
-)
+# =====================
+# TABEL INTERAKTIF
+# =====================
+st.subheader("Tabel Data")
 
 st.dataframe(
-    df_table,
+    df_filtered.sort_values(
+        by=["Tahun", indikator],
+        ascending=[True, False]
+    ),
     use_container_width=True,
-    height=500
+    height=450
 )
