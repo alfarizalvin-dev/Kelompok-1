@@ -169,57 +169,6 @@ line_chart = alt.Chart(trend_df).mark_line(point=True).encode(
 with col2:
     st.altair_chart(line_chart, use_container_width=True)
 
-st.subheader("🗺️ Peta Provinsi Indonesia")
-
-BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-DATA_PATH = os.path.join(BASE_DIR, "Dataset_prakbigdata.xlsx")
-GEO_PATH = os.path.join(BASE_DIR, "indonesia_provinsi.json")
-
-df = pd.read_excel(DATA_PATH)
-
-# Standarisasi kolom
-df.columns = (
-    df.columns.str.strip().str.lower().str.replace(" ", "_")
-)
-
-kol_prov = df.columns[0]
-kol_tahun = df.columns[1]
-indikator = df.columns[2:]
-
-# Filter
-tahun = st.sidebar.slider(
-    "Pilih Tahun",
-    int(df[kol_tahun].min()),
-    int(df[kol_tahun].max()),
-    int(df[kol_tahun].max())
-)
-
-indikator_pilihan = st.sidebar.selectbox("Pilih Indikator", indikator)
-
-df_map = df[df[kol_tahun] == tahun]
-
-# Load geojson
-with open(GEO_PATH, "r", encoding="utf-8") as f:
-    geojson = json.load(f)
-
-fig = px.choropleth(
-    df_map,
-    geojson=geojson,
-    locations=kol_prov,
-    featureidkey="properties.name",
-    color=indikator_pilihan,
-    hover_name=kol_prov,
-    color_continuous_scale="Viridis",
-)
-
-fig.update_geos(fitbounds="locations", visible=False)
-fig.update_layout(margin=dict(l=0, r=0, t=30, b=0))
-
-st.plotly_chart(fig, use_container_width=True)
-
-
-
-
 
 # =====================================================
 # ANALISIS PARAGRAF OTOMATIS
