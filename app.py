@@ -10,12 +10,7 @@ pg = st.navigation(
     pages,
     position="sidebar",
     expanded=True
-)
-st.image(
-    "cover.jpg",
-    caption="Judul Gambar",
-    use_container_width=True
-)
+
 pg.run()
 
 st.markdown(
