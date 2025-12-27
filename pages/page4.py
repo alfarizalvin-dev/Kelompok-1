@@ -1,7 +1,13 @@
 import streamlit as st
 
-st.set_page_config(page_title="Page 4", layout="wide")
+# Judul Utama
+st.title("Cara mengunduh Dataset")
 
-st.title("📄 Page 4")
-st.write("Ini adalah halaman baru")
+st.markdown("---")
 
+# Definisi
+st.header("Cara Mengunduh Dataset")
+
+st.write("""
+Berikut adalah cara untuk mengunduh dataset dari sumber website BPS
+""")
