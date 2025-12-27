@@ -86,7 +86,7 @@ tahun = st.sidebar.slider(
 )
 
 indikator_pilihan = st.sidebar.selectbox(
-    "Pilih Indikator Perbandingan",
+    "Pilih Indikator",
     indikator
 )
 
