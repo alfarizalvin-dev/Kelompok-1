@@ -98,7 +98,7 @@ filtered_df = df[
 # =====================================================
 # TITLE
 # =====================================================
-st.title("📊 Analisis Data & Kesimpulan Dinamis")
+st.title("📊 Analisis Data & Kesimpulan")
 
 st.markdown("""
 Halaman ini menyajikan **analisis interaktif** berbasis data pembangunan provinsi.
