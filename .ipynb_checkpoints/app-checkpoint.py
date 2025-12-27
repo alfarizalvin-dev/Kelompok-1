@@ -1,68 +1,46 @@
 import streamlit as st
 
-pages = [
-    st.Page(page="pages/page1.py", title="Beranda", icon="🏠"),
-    st.Page(page="pages/page2.py", title="Data Interaktif", icon="📊"),
-    st.Page(page="pages/page3.py", title="Analisis Data & Kesimpulan", icon="🔬"),
-    st.Page(page="pages/page4.py", title="Cara Mengunduh Data", icon="⬇️")
-]
-
-pg = st.navigation(
-    pages,
-    position="sidebar",
-    expanded=True
+# =========================
+# KONFIGURASI HALAMAN
+# =========================
+st.set_page_config(
+    page_title="Kelompok 1 Prak Big Data",
+    layout="wide"
 )
-pg.run()
 
+# =========================
+# KONTEN HALAMAN UTAMA
+# =========================
+st.title("Beranda")
+st.write("Gunakan sidebar di sebelah kiri untuk berpindah halaman.")
+
+# =========================
+# STYLE (AMAN & TIDAK MERUSAK NAVIGASI)
+# =========================
 st.markdown(
     """
     <style>
-    /* =========================
-       KONTEN TENGAH (MAIN AREA)
-       ========================= */
+    /* MAIN CONTENT */
     section[data-testid="stMain"] {
-        background-color: #EBF4DD; /* hijau muda solid */
+        background-color: #EBF4DD;
         padding: 2rem;
     }
 
-    /* =========================
-       SIDEBAR
-       ========================= */
+    /* SIDEBAR */
     section[data-testid="stSidebar"] {
-        background-color: #5A7863; /* hijau tua */
+        background-color: #5A7863;
     }
 
-    /* =========================
-       FONT SIDEBAR
-       ========================= */
+    /* FONT SIDEBAR */
     section[data-testid="stSidebar"] * {
-        color: #FFFFFF !important; /* font putih */
-    }
-
-    /* Label selectbox & slider */
-    section[data-testid="stSidebar"] label {
         color: #FFFFFF !important;
-        font-weight: 600;
     }
 
-    /* Dropdown & input tetap readable */
-    section[data-testid="stSidebar"] select,
-    section[data-testid="stSidebar"] input {
-        color: #000000 !important;
-        background-color: #FFFFFF !important;
-        border-radius: 8px;
-    }
-
-    /* =========================
-       JUDUL KONTEN
-       ========================= */
+    /* JUDUL */
     h1, h2, h3 {
-        color: #2F4F3F; /* hijau gelap elegan */
+        color: #2F4F3F;
     }
     </style>
     """,
     unsafe_allow_html=True
 )
-
-
-
