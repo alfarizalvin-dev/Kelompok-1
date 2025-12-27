@@ -4,7 +4,10 @@ import streamlit as st
 st.title("Analisis Pengaruh Indikator Pembangunan Manusia terhadap Pertumbuhan Ekonomi")
 
 st.markdown("---")
-
+st.image(
+    "cover.jpg",
+    use_container_width=True
+)
 # Definisi
 st.header("Definisi")
 
